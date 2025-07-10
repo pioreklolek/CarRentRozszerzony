@@ -133,4 +133,24 @@ public class VehicleLocationService {
             }
             return false;
     }
+    public Vehicle setVehicleLocationByName(Long vehicleId, String locationName) {
+        Vehicle vehicle = vehicleRepository.findById(vehicleId);
+        if (vehicle == null) {
+            throw new IllegalArgumentException("Pojazd nie został znaleziony!");
+        }
+
+        AllowedLocation location = allowedLocationRepository.findByNameAndIsActiveTrue(locationName);
+        if (location == null) {
+            throw new IllegalArgumentException("Lokalizacja nie została znaleziona lub jest nieaktywna!");
+        }
+
+        vehicle.updateLocation(
+                location.getLatitude(),
+                location.getLongitude(),
+                location.getName(),
+                true
+        );
+
+        return vehicleRepository.save(vehicle);
+    }
 }

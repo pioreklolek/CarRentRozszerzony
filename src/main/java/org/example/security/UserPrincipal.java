@@ -29,7 +29,6 @@ public class UserPrincipal implements UserDetails {
     }
 
     public static UserPrincipal create(User user) {
-        // DEBUG: Sprawdź jakie role są pobierane z bazy
         System.out.println("DEBUG: Creating UserPrincipal for user: " + user.getLogin());
         System.out.println("DEBUG: User roles count: " + user.getRoles().size());
 

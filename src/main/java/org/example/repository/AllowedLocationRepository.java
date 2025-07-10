@@ -12,4 +12,5 @@ public interface AllowedLocationRepository {
     List<AllowedLocation> findByIsMainOffice(boolean isMainOffice);
     void delete(AllowedLocation allowedLocation);
     void deleteById(long Id);
+    AllowedLocation findByNameAndIsActiveTrue(String name);
 }

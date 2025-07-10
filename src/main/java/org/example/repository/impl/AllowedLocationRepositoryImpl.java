@@ -64,4 +64,14 @@ public class AllowedLocationRepositoryImpl implements AllowedLocationRepository 
         delete(allowedLocation);
     }
     }
+    @Override
+    @Transactional(readOnly = true)
+    public AllowedLocation findByNameAndIsActiveTrue(String name) {
+        List<AllowedLocation> result = entityManager.createQuery(
+                "SELECT a FROM AllowedLocation a WHERE a.name = :name AND a.isActive = true",
+                AllowedLocation.class
+        ).setParameter("name", name).getResultList();
+
+        return result.isEmpty() ? null : result.get(0);
+    }
 }

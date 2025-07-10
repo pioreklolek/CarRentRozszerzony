@@ -1,29 +1,37 @@
 package org.example.api.controller;
 
 import org.example.model.AllowedLocation;
+import org.example.model.Rental;
+import org.example.model.User;
 import org.example.model.Vehicle;
-import org.example.repository.VehicleRepository;
 import org.example.service.AllowedLocationService;
+import org.example.service.RentalService;
+import org.example.service.UserService;
 import org.example.service.VehicleLocationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.stereotype.Repository;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.security.Principal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("api/locations")
 public class VehicleLocationContoller {
     private final VehicleLocationService vehicleLocationService;
     private final AllowedLocationService allowedLocationService;
+    private final RentalService rentalService;
+    private final UserService userService;
 
-    public VehicleLocationContoller(VehicleLocationService vehicleLocationService, AllowedLocationService allowedLocationService) {
+    public VehicleLocationContoller(VehicleLocationService vehicleLocationService, AllowedLocationService allowedLocationService, RentalService rentalService, UserService userService) {
         this.vehicleLocationService = vehicleLocationService;
         this.allowedLocationService = allowedLocationService;
+        this.rentalService = rentalService;
+        this.userService = userService;
     }
 
     @GetMapping("/allowed")
@@ -68,34 +76,80 @@ public class VehicleLocationContoller {
     }
 
     @PostMapping("/vehicles/{vehicleId}/random-location")
-    @PreAuthorize("hasAuthority('admin')")
-    public ResponseEntity<?> setRandomVehicleLocation(@PathVariable Long vehicleId) {
-        Vehicle vehicle = vehicleLocationService.setRandomVehicleLocation(vehicleId);
+    @PreAuthorize("hasAnyAuthority('admin', 'user')")
+    public ResponseEntity<?> setRandomVehicleLocation(
+            @PathVariable Long vehicleId,
+            Principal principal) {
+        try {
+            User user = userService.findByLogin(principal.getName());
 
-        if (vehicle == null) {
-            return ResponseEntity.badRequest().body("Pojazd nie został znaleziony!");
+            Optional<Rental> optionalRental = rentalService.findActiveRentalByVehicleId(vehicleId);
+
+            if (optionalRental.isEmpty()) {
+                return ResponseEntity.status(403).body("Brak aktywnego wypożyczenia dla tego pojazdu!");
+            }
+
+            Rental rental = optionalRental.get();
+
+            if (!user.getId().equals(rental.getUserId()) && !principal.getName().equals("admin")) {
+                return ResponseEntity.status(403).body("Nie masz uprawnień do zmiany lokalizacji tego pojazdu!");
+            }
+
+            Vehicle vehicle = vehicleLocationService.setRandomVehicleLocation(vehicleId);
+
+            if (vehicle == null) {
+                return ResponseEntity.badRequest().body("Pojazd nie został znaleziony!");
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("vehicle", vehicle);
+            response.put("message", "Losowa lokalizacja pojazdu została ustawiona");
+            response.put("isAtAllowedLocation", vehicle.isAtAllowedLocation());
+
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body("Błąd: " + e.getMessage());
         }
-        Map<String, Object> response = new HashMap<>();
-        response.put("vehicle", vehicle);
-        response.put("message", "Losowa lokalizacja pojazdu została ustawiona");
-        response.put("isAtAllowedLocation", vehicle.isAtAllowedLocation());
-
-        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/vehicles/{vehicleId}/status")
-    @PreAuthorize("hasAuthority('admin')")
-    public ResponseEntity<?> checkVehicleLocationStatus(@PathVariable Long vehicleId) {
-        boolean isAtAllowedLocation = vehicleLocationService.isVehicleAtAllowedLocation(vehicleId);
-        boolean isAtMainOffice = vehicleLocationService.isVehicleAtMainOffice(vehicleId);
+    @PreAuthorize("hasAnyAuthority('admin', 'user')")
+    public ResponseEntity<?> checkVehicleLocationStatus(
+            @PathVariable Long vehicleId,
+            Principal principal) {
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("vehicleId", vehicleId);
-        response.put("isAtAllowedLocation", isAtAllowedLocation);
-        response.put("isAtMainOffice", isAtMainOffice);
-        response.put("message", isAtAllowedLocation ? "Pojazd jest w dozwolonej lokacji!" : "Pojazd jest w niedozwolonej lokacji!");
+        try {
+            User user = userService.findByLogin(principal.getName());
 
-        return ResponseEntity.ok(response);
+            Optional<Rental> optionalRental = rentalService.findActiveRentalByVehicleId(vehicleId);
+
+            if (optionalRental.isEmpty()) {
+                return ResponseEntity.status(403).body("Brak aktywnego wypożyczenia dla tego pojazdu!");
+            }
+
+            Rental rental = optionalRental.get();
+
+            if (!user.getId().equals(rental.getUserId()) && !principal.getName().equals("admin")) {
+                return ResponseEntity.status(403).body("Nie masz uprawnień do sprawdzenia statusu lokalizacji tego pojazdu!");
+            }
+
+            boolean isAtAllowedLocation = vehicleLocationService.isVehicleAtAllowedLocation(vehicleId);
+            boolean isAtMainOffice = vehicleLocationService.isVehicleAtMainOffice(vehicleId);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("vehicleId", vehicleId);
+            response.put("isAtAllowedLocation", isAtAllowedLocation);
+            response.put("isAtMainOffice", isAtMainOffice);
+            response.put("message", isAtAllowedLocation
+                    ? "Pojazd jest w dozwolonej lokacji!"
+                    : "Pojazd jest w niedozwolonej lokacji!");
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Wystąpił błąd podczas sprawdzania statusu: " + e.getMessage());
+        }
     }
     @GetMapping("/vehicles/not-allowed")
     @PreAuthorize("hasAuthority('admin')")
@@ -108,5 +162,40 @@ public class VehicleLocationContoller {
     public ResponseEntity<?> updateAllVehicleLocationStatus() {
         vehicleLocationService.updateAllVehicleLocationStatus();
         return ResponseEntity.ok(Map.of("message", "Status lokalizacji zostal zaktualizowany"));
+    }
+
+
+    @PostMapping("/vehicles/{vehicleId}/location-by-name")
+    @PreAuthorize("hasAnyAuthority('admin', 'user')")
+    public ResponseEntity<?> setVehicleLocationByName(
+            @PathVariable Long vehicleId,
+            @RequestParam String locationName,
+            Principal principal) {
+        try {
+            User user = userService.findByLogin(principal.getName());
+
+            Optional<Rental> optionalRental = rentalService.findActiveRentalByVehicleId(vehicleId);
+
+            if (optionalRental.isEmpty()) {
+                return ResponseEntity.status(403).body("Brak aktywnego wypożyczenia dla tego pojazdu!");
+            }
+
+            Rental rental = optionalRental.get();
+
+            if (!user.getId().equals(rental.getUserId()) && !principal.getName().equals("admin")) {
+                return ResponseEntity.status(403).body("Nie masz uprawnień do zmiany lokalizacji tego pojazdu!");
+            }
+
+            Vehicle vehicle = vehicleLocationService.setVehicleLocationByName(vehicleId, locationName);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("vehicle", vehicle);
+            response.put("message", "Lokalizacja pojazdu została ustawiona na podstawie nazwy!");
+            response.put("isAtAllowedLocation", vehicle.isAtAllowedLocation());
+
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body("Błąd: " + e.getMessage());
+        }
     }
 }
