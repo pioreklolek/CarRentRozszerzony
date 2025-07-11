@@ -35,7 +35,7 @@ public class VehicleLocationContoller {
     }
 
     @GetMapping("/allowed")
-    @PreAuthorize("hasAuthority('admin')")
+    @PreAuthorize("hasAnyAuthority('admin', 'user')")
     public ResponseEntity<List<AllowedLocation>> getAllowedLocations() {
         return ResponseEntity.ok(allowedLocationService.findAllActive());
     }
@@ -54,7 +54,7 @@ public class VehicleLocationContoller {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/vehicles/{vehicleId}/location")
+    @PostMapping("/set-location-by-coords/{vehicleId}")
     @PreAuthorize("hasAuthority('admin')")
     public ResponseEntity<?> setVehicleLocation(
             @PathVariable Long vehicleId,
@@ -75,7 +75,7 @@ public class VehicleLocationContoller {
         }
     }
 
-    @PostMapping("/vehicles/{vehicleId}/random-location")
+    @PostMapping("/set-random-location/{vehicleId}")
     @PreAuthorize("hasAnyAuthority('admin', 'user')")
     public ResponseEntity<?> setRandomVehicleLocation(
             @PathVariable Long vehicleId,
@@ -113,7 +113,7 @@ public class VehicleLocationContoller {
         }
     }
 
-    @GetMapping("/vehicles/{vehicleId}/status")
+    @GetMapping("/status/{vehicleId}")
     @PreAuthorize("hasAnyAuthority('admin', 'user')")
     public ResponseEntity<?> checkVehicleLocationStatus(
             @PathVariable Long vehicleId,
@@ -151,13 +151,13 @@ public class VehicleLocationContoller {
             return ResponseEntity.status(500).body("Wystąpił błąd podczas sprawdzania statusu: " + e.getMessage());
         }
     }
-    @GetMapping("/vehicles/not-allowed")
+    @GetMapping("/not-allowed")
     @PreAuthorize("hasAuthority('admin')")
     public ResponseEntity<List<Vehicle>> getVehiclesAtNotAllowedLocation() {
         List<Vehicle> vehicles = vehicleLocationService.getVehiclesNotAtAllowedLocation();
         return  ResponseEntity.ok(vehicles);
     }
-    @PostMapping("/vehicles/update-all-status")
+    @PostMapping("/update-all-status")
     @PreAuthorize("hasAuthority('admin')")
     public ResponseEntity<?> updateAllVehicleLocationStatus() {
         vehicleLocationService.updateAllVehicleLocationStatus();
@@ -165,7 +165,7 @@ public class VehicleLocationContoller {
     }
 
 
-    @PostMapping("/vehicles/{vehicleId}/location-by-name")
+    @PostMapping("/set-location/{vehicleId}")
     @PreAuthorize("hasAnyAuthority('admin', 'user')")
     public ResponseEntity<?> setVehicleLocationByName(
             @PathVariable Long vehicleId,

@@ -105,7 +105,9 @@ public class RentalController {
 
         Rental returnedRental = rentalService.returnRental(vehicleId,user.getId());
         if(returnedRental == null) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity
+                    .badRequest()
+                    .body(Map.of("message", "Nie możesz zwrócić pojazdu, ponieważ nie znajduje się w dozwolonym miejscu."));
         }
         PaymentRequest paymentRequest = new PaymentRequest();
         paymentRequest.setRentalId(returnedRental.getId());

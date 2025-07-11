@@ -13,7 +13,8 @@ public interface UserService {
      List<User> findAll();
 
     void save(User user);
-     User createUser(String login, String password, String role);
+    User createUser(String login, String password, String roleName, String address, String postalCode, String country);
+
      void deleteById(Long id);
      void deleteUserByLogin(String login);
      User updateUser(Long id, User userDetails);

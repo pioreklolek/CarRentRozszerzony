@@ -52,7 +52,7 @@ public class UserServiceImpl implements UserService {
         repo.save(user);
     }
     @Override
-    public User createUser(String login,String password, String roleName) {
+    public User createUser(String login, String password, String roleName, String address, String postalCode, String country) {
         if (repo.findByLogin(login) != null) {
             throw new IllegalArgumentException("Użytkownik o podanym loginie już istnieje!");
         }
@@ -60,7 +60,11 @@ public class UserServiceImpl implements UserService {
         Role role = roleService.getOrCreateRole(roleName.toLowerCase());
         Set<Role> roles = new HashSet<>();
         roles.add(role);
-        User nUser = new User(login , hashedPassword, roles);
+
+        User nUser = new User(login, hashedPassword, roles);
+        nUser.setAddress(address);
+        nUser.setPostalCode(postalCode);
+        nUser.setCountry(country);
         return repo.save(nUser);
     }
     @Override

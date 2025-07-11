@@ -66,9 +66,18 @@ public class RentalServiceImpl implements RentalService {
     }
     @Override
     public Rental returnRental(Long vehicleId, Long userId) {
-        Optional<Rental> rental = rentalRepo.findActiveRentalByVehicleId(vehicleId);
-        if (rental.isPresent()) {
-            Rental activeRental = rental.get();
+        Optional<Rental> rentalOpt = rentalRepo.findActiveRentalByVehicleId(vehicleId);
+        if (rentalOpt.isPresent()) {
+            Rental activeRental = rentalOpt.get();
+
+            Vehicle vehicle = vehicleRepo.findById(vehicleId);
+            if (vehicle == null) {
+                return null;
+            }
+
+            if (!vehicle.isAtAllowedLocation()) {
+                return null;
+            }
 
             LocalDateTime now = LocalDateTime.now();
             LocalDateTime end = now.withSecond(0).withNano(0);
@@ -81,15 +90,12 @@ public class RentalServiceImpl implements RentalService {
             BigDecimal totalCost = paymentService.calculateTotalCost(vehicleId, rentalDays);
             activeRental.setTotalCost(totalCost);
             activeRental.setPaymentStatus(PaymentStatus.PENDING);
-
             activeRental.setReturned(true);
             rentalRepo.save(activeRental);
 
-            Vehicle vehicle = vehicleRepo.findById(vehicleId);
-            if (vehicle != null) {
-                vehicle.setRented(false);
-                vehicleRepo.save(vehicle);
-            }
+            vehicle.setRented(false);
+            vehicleRepo.save(vehicle);
+
             return activeRental;
         }
         return null;

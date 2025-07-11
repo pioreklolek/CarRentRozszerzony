@@ -69,7 +69,12 @@ public class AuthContoller {
             String role = registerRequest.getRoles() != null ? registerRequest.getRoles().toString().toLowerCase() : "user";
 
             User user = userService.createUser(
-                    registerRequest.getLogin(),registerRequest.getPassword(),role
+                    registerRequest.getLogin(),
+                    registerRequest.getPassword(),
+                    role,
+                    registerRequest.getAddress(),
+                    registerRequest.getPostalCode(),
+                    registerRequest.getCountry()
             );
             return ResponseEntity.ok(new MessageResponse("Użytkownik został zarejestrowany pomyślnie!"));
         } catch (Exception e) {
