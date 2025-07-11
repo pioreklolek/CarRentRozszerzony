@@ -17,7 +17,7 @@ public class VehicleLocationScheduler {
         this.vehicleLocationService = vehicleLocationService;
         this.vehicleRepository = vehicleRepository;
     }
-    @Scheduled(fixedRate = 60000)
+    @Scheduled(fixedRate = 180000)
     public void updateRandomVehicleLocations() {
         List<Vehicle> rentedVehicles = vehicleRepository.findByRentedTrue();
 
@@ -26,7 +26,7 @@ public class VehicleLocationScheduler {
         }
         System.out.printf("Zaktualizowano lokacjie " + rentedVehicles.size() + " pojazdow");
     }
-    @Scheduled(fixedRate = 360000)
+    @Scheduled(fixedRate = 60000)
     public void updateAllVehicleLocationStatus() {
         vehicleLocationService.updateAllVehicleLocationStatus();
         System.out.printf("Zaktualizowno lokacje wszystkich pojazdow!");
