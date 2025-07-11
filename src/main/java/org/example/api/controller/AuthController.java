@@ -92,7 +92,6 @@ public class AuthController {
                 userService.findByLogin(registerRequest.getLogin());
                 return ResponseEntity.badRequest().body(new MessageResponse("Błąd: Login jest już zajęty!"));
             } catch (UsernameNotFoundException e) {
-                // Login jest dostępny
             }
             String role = registerRequest.getRoles() != null ? registerRequest.getRoles().toString().toLowerCase() : "user";
 
