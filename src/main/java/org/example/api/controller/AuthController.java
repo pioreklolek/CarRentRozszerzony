@@ -1,5 +1,13 @@
 package org.example.api.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.example.dto.JwtResponse;
 import org.example.dto.LoginRequest;
@@ -23,19 +31,29 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/auth")
-public class AuthContoller {
+@Tag(name = "Authentication", description = "API do autoryzacji i uwierzytelniania użytkowników")
+public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final UserService userService;
     private final JwtUtils jwtUtils;
 
-    public AuthContoller(AuthenticationManager authenticationManager, UserService userService, JwtUtils jwtUtils) {
+    public AuthController(AuthenticationManager authenticationManager, UserService userService, JwtUtils jwtUtils) {
         this.authenticationManager = authenticationManager;
         this.userService = userService;
         this.jwtUtils = jwtUtils;
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> authUser(@Valid @RequestBody LoginRequest loginRequest) {
+    @Operation(summary = "Logowanie użytkownika", description = "Uwierzytelnia użytkownika i zwraca token JWT")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Logowanie pomyślne",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = JwtResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Nieprawidłowe dane logowania",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = MessageResponse.class)))
+    })
+    public ResponseEntity<?> authUser(
+            @Parameter(description = "Dane logowania użytkownika", required = true)
+            @Valid @RequestBody LoginRequest loginRequest) {
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(loginRequest.getLogin(), loginRequest.getPassword()));
@@ -57,14 +75,24 @@ public class AuthContoller {
                     .body(new MessageResponse("Błąd logowania: " + e.getMessage()));
         }
     }
+
     @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest registerRequest) {
+    @Operation(summary = "Rejestracja nowego użytkownika", description = "Tworzy nowe konto użytkownika")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Rejestracja pomyślna",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = MessageResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Błąd podczas rejestracji",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = MessageResponse.class)))
+    })
+    public ResponseEntity<?> registerUser(
+            @Parameter(description = "Dane rejestracyjne użytkownika", required = true)
+            @Valid @RequestBody RegisterRequest registerRequest) {
         try {
             try {
                 userService.findByLogin(registerRequest.getLogin());
                 return ResponseEntity.badRequest().body(new MessageResponse("Błąd: Login jest już zajęty!"));
             } catch (UsernameNotFoundException e) {
-
+                // Login jest dostępny
             }
             String role = registerRequest.getRoles() != null ? registerRequest.getRoles().toString().toLowerCase() : "user";
 
@@ -78,13 +106,23 @@ public class AuthContoller {
             );
             return ResponseEntity.ok(new MessageResponse("Użytkownik został zarejestrowany pomyślnie!"));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Bład resjestracji " + e.getMessage()));
+            return ResponseEntity.badRequest().body(new MessageResponse("Błąd rejestracji: " + e.getMessage()));
         }
     }
+
     @GetMapping("/profile")
-    public ResponseEntity<?> getUserProfile(Authentication authentication) {
+    @Operation(summary = "Pobierz profil użytkownika", description = "Zwraca dane profilu zalogowanego użytkownika")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Profil użytkownika",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = User.class))),
+            @ApiResponse(responseCode = "400", description = "Brak autoryzacji lub użytkownik nie znaleziony",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = MessageResponse.class)))
+    })
+    public ResponseEntity<?> getUserProfile(
+            @Parameter(hidden = true) Authentication authentication) {
         if (authentication == null) {
-            return  ResponseEntity.badRequest().body(new MessageResponse("Brak autoryzacji!"));
+            return ResponseEntity.badRequest().body(new MessageResponse("Brak autoryzacji!"));
         }
         String username = authentication.getName();
         User user = userService.findByLogin(username);
@@ -92,6 +130,6 @@ public class AuthContoller {
         if (user == null) {
             return ResponseEntity.badRequest().body(new MessageResponse("Użytkownik nie znaleziony!"));
         }
-        return  ResponseEntity.ok(user);
+        return ResponseEntity.ok(user);
     }
 }

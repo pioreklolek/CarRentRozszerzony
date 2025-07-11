@@ -3,6 +3,14 @@ package org.example.api.controller;
 import com.stripe.model.Event;
 import com.stripe.model.StripeObject;
 import com.stripe.model.checkout.Session;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.util.stream.Collectors;
@@ -28,6 +36,8 @@ import java.util.Map;
 
 @Controller
 @RequestMapping("/api/payments")
+@Tag(name = "Płatności", description = "Zarządzanie płatnościami za wypożyczenia pojazdów")
+@SecurityRequirement(name = "bearerAuth")
 public class PaymentController {
     private final PaymentService paymentService;
     private final RentalServiceImpl rentalService;
@@ -43,7 +53,24 @@ public class PaymentController {
     }
 
     @PostMapping("/create-payment-intent")
-    public ResponseEntity<?> createPaymentIntent(@RequestBody PaymentRequest paymentRequest, Authentication authentication) {
+    @Operation(
+            summary = "Tworzenie Payment Intent",
+            description = "Tworzy Payment Intent w Stripe dla konkretnego wypożyczenia"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Payment Intent został utworzony pomyślnie"),
+            @ApiResponse(responseCode = "400", description = "Nieprawidłowe dane lub płatność już wykonana"),
+            @ApiResponse(responseCode = "403", description = "Brak uprawnień do tej płatności")
+    })
+    public ResponseEntity<?> createPaymentIntent(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Dane żądania płatności",
+                    required = true,
+                    content = @Content(schema = @Schema(implementation = PaymentRequest.class))
+            )
+            @RequestBody PaymentRequest paymentRequest,
+            Authentication authentication) {
+
         Rental rental = rentalService.findById(paymentRequest.getRentalId());
         if (rental == null) {
             return ResponseEntity.badRequest().body("Nie znaleziono wypożyczenia!");
@@ -64,7 +91,24 @@ public class PaymentController {
     }
 
     @PostMapping("/create-checkout-session")
-    public ResponseEntity<?> createCheckoutSession(@RequestBody PaymentRequest paymentRequest, Authentication authentication) {
+    @Operation(
+            summary = "Tworzenie sesji Checkout",
+            description = "Tworzy sesję Stripe Checkout dla konkretnego wypożyczenia"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Sesja checkout została utworzona pomyślnie"),
+            @ApiResponse(responseCode = "400", description = "Nieprawidłowe dane lub płatność już wykonana"),
+            @ApiResponse(responseCode = "403", description = "Brak uprawnień do tej płatności")
+    })
+    public ResponseEntity<?> createCheckoutSession(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Dane żądania płatności",
+                    required = true,
+                    content = @Content(schema = @Schema(implementation = PaymentRequest.class))
+            )
+            @RequestBody PaymentRequest paymentRequest,
+            Authentication authentication) {
+
         Rental rental = rentalService.findById(paymentRequest.getRentalId());
         if (rental == null) {
             return ResponseEntity.badRequest().body("Nie znaleziono wypożyczenia!");
@@ -84,8 +128,19 @@ public class PaymentController {
             return ResponseEntity.badRequest().body(response);
         }
     }
+
     @GetMapping("/success")
-    public ResponseEntity<?> paymentSuccess(@RequestParam("session_id") String sessionId) {
+    @Operation(
+            summary = "Potwierdzenie płatności",
+            description = "Endpoint do potwierdzenia pomyślnej płatności po powrocie z Stripe"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Płatność została pomyślnie przetworzona"),
+            @ApiResponse(responseCode = "400", description = "Błąd podczas przetwarzania płatności")
+    })
+    public ResponseEntity<?> paymentSuccess(
+            @Parameter(description = "ID sesji Stripe", required = true)
+            @RequestParam("session_id") String sessionId) {
         try {
             PaymentStatus status = paymentService.checkCheckouSessionStatus(sessionId);
 
@@ -111,35 +166,73 @@ public class PaymentController {
             return ResponseEntity.badRequest().body("Błąd podczas przetwarzania płatności: " + e.getMessage());
         }
     }
+
     @GetMapping("/cancel")
-    public ResponseEntity<?> paymentCancel(@RequestParam("rental_id") Long rentalId) {
+    @Operation(
+            summary = "Anulowanie płatności",
+            description = "Endpoint do obsługi anulowania płatności"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Płatność została anulowana")
+    })
+    public ResponseEntity<?> paymentCancel(
+            @Parameter(description = "ID wypożyczenia", required = true)
+            @RequestParam("rental_id") Long rentalId) {
         Map<String, Object> response = new HashMap<>();
         response.put("status", "cancelled");
         response.put("message", "Płatność została anulowana!");
-        response.put("rentalId",rentalId);
+        response.put("rentalId", rentalId);
         return ResponseEntity.ok(response);
     }
+
     @PostMapping("/update-status/{rentalId}")
-    public ResponseEntity<?> updatePaymentStatus(@PathVariable Long rentalId, @RequestParam String stripePaymentId,@RequestParam(defaultValue = "false") boolean isCheckoutSession, Authentication authentication) {
+    @Operation(
+            summary = "Aktualizacja statusu płatności",
+            description = "Aktualizuje status płatności dla konkretnego wypożyczenia"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Status płatności został zaktualizowany"),
+            @ApiResponse(responseCode = "400", description = "Nie znaleziono wypożyczenia"),
+            @ApiResponse(responseCode = "403", description = "Brak uprawnień")
+    })
+    public ResponseEntity<?> updatePaymentStatus(
+            @Parameter(description = "ID wypożyczenia", required = true)
+            @PathVariable Long rentalId,
+            @Parameter(description = "ID płatności Stripe", required = true)
+            @RequestParam String stripePaymentId,
+            @Parameter(description = "Czy to sesja checkout", required = false)
+            @RequestParam(defaultValue = "false") boolean isCheckoutSession,
+            Authentication authentication) {
+
         Rental rental = rentalService.findById(rentalId);
-        if(rental == null) {
+        if (rental == null) {
             return ResponseEntity.badRequest().body("Nie znaleziono wypożyczenia");
         }
-        if(!isUserAuthorizedForRental(rental,authentication)) {
-            return  ResponseEntity.status(403).body("Brak uprawnień");
+        if (!isUserAuthorizedForRental(rental, authentication)) {
+            return ResponseEntity.status(403).body("Brak uprawnień");
         }
-        Rental updateRental = rentalService.updatePaymentStatus(rentalId,stripePaymentId,isCheckoutSession);
+        Rental updateRental = rentalService.updatePaymentStatus(rentalId, stripePaymentId, isCheckoutSession);
 
         Map<String, Object> response = new HashMap<>();
         response.put("rental", updateRental);
-        response.put("paymentStatus",updateRental.getPaymentStatus());
+        response.put("paymentStatus", updateRental.getPaymentStatus());
 
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/webhook")
+    @Operation(
+            summary = "Webhook Stripe",
+            description = "Endpoint do obsługi webhooków od Stripe"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Webhook przetworzony pomyślnie"),
+            @ApiResponse(responseCode = "400", description = "Błąd podczas przetwarzania webhook")
+    })
     public ResponseEntity<String> handleStripeWebhook(
-            HttpServletRequest request, @RequestHeader("Stripe-Signature") String sigHeader) {
+            HttpServletRequest request,
+            @Parameter(description = "Sygnatura Stripe", required = true)
+            @RequestHeader("Stripe-Signature") String sigHeader) {
 
         String payload;
         try {
@@ -172,8 +265,21 @@ public class PaymentController {
             return ResponseEntity.status(400).body("Webhook error: " + e.getMessage());
         }
     }
+
     @PostMapping("/check-payment-status")
-    public ResponseEntity<?> checkPaymentStatus(@RequestParam String sessionId, Authentication authentication) {
+    @Operation(
+            summary = "Sprawdzenie statusu płatności",
+            description = "Sprawdza aktualny status płatności na podstawie ID sesji"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Status płatności sprawdzony pomyślnie"),
+            @ApiResponse(responseCode = "400", description = "Nie znaleziono wypożyczenia lub błąd"),
+            @ApiResponse(responseCode = "403", description = "Brak uprawnień")
+    })
+    public ResponseEntity<?> checkPaymentStatus(
+            @Parameter(description = "ID sesji Stripe", required = true)
+            @RequestParam String sessionId,
+            Authentication authentication) {
         try {
             Rental rental = rentalService.findByStripeSessionId(sessionId);
             if (rental == null) {
@@ -208,10 +314,10 @@ public class PaymentController {
         }
     }
 
-
     private void handleChargeSucceeded(Event event) {
         System.out.println("Charge succeeded: " + event.getId());
     }
+
     private void handleCheckoutSessionCompleted(Event event) {
         try {
             StripeObject stripeObject = event.getDataObjectDeserializer().getObject().orElse(null);
@@ -221,7 +327,7 @@ public class PaymentController {
 
                 Rental rental = rentalService.findByStripeSessionId(session.getId());
                 if (rental != null && rental.getPaymentStatus() != PaymentStatus.PAID) {
-                    rentalService.updatePaymentStatus(rental.getId(),session.getId(), true);
+                    rentalService.updatePaymentStatus(rental.getId(), session.getId(), true);
                     System.out.printf("Płatność automatycznie zaktualizowana dla rental ID: " + rental.getId());
                 }
             }
@@ -229,11 +335,10 @@ public class PaymentController {
             System.err.println("Błąd podczas obsługi checkout.session.completed:" + e.getMessage());
         }
     }
+
     private void handlePaymentIntentSucceeded(Event event) {
         System.out.printf("PaymentIntent succeeded:" + event.getId());
     }
-
-
 
     private boolean isUserAuthorizedForRental(Rental rental, Authentication authentication) {
         if (authentication.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("admin"))) {
